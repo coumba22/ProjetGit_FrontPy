@@ -1,0 +1,6 @@
+Flask
+pydriller
+matplotlib
+seaborn
+radon
+gitpython

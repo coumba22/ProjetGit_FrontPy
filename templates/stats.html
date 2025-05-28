@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Statistiques des commits</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Statistiques des commits</h1>
+
+    <h2>Graphique des commits</h2>
+    <img src="/stats/graph.png" alt="Graphique des commits">
+
+    <h2>Détails par auteur</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Auteur</th>
+                <th>Commits</th>
+                <th>Additions</th>
+                <th>Suppressions</th>
+                <th>Fichiers modifiés</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for auteur, stats in data.authors.items() %}
+                <tr>
+                    <td>{{ auteur }}</td>
+                    <td>{{ stats.commits }}</td>
+                    <td>{{ stats.additions }}</td>
+                    <td>{{ stats.deletions }}</td>
+                    <td>{{ stats.files_changed }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Voir les détails individuels</h2>
+    <ul>
+        {% for auteur in data.authors.keys() %}
+            <li>
+                <a href="{{ url_for('auteur_details', nom=auteur) }}">
+                    <button>{{ auteur }}</button>
+                </a>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <hr>
+
+    
+    <h2>Graphique des scores par TD (tous groupes)</h2>
+    <img src="/indicateurs/grouped-graph.png" alt="Graphique par groupe">
+
+    <h3>Filtrer par groupe</h3>
+    <select id="filtre-groupe" onchange="filtrerGroupe()">
+        <option value="">-- Sélectionner un groupe --</option>
+        <option value="groupeA">Groupe A</option>
+        <option value="groupeB">Groupe B</option>
+    </select>
+
+  <h2>Graphique des scores par TD</h2>
+    <!-- Taille contrôlée via div -->
+    <div style="width:500px; height:300px;">
+        <canvas id="scoreChart"></canvas>
+    </div>
+    <div id="resultats-groupe"></div>
+
+    
+    <h2>Exporter les scores</h2>
+    <button onclick="window.location.href='/api/export/pdf'">📄 Exporter en PDF</button>
+
+    <script>
+        let chartInstance = null;
+
+        function filtrerGroupe() {
+            const groupe = document.getElementById("filtre-groupe").value;
+            fetch("http://127.0.0.1:5000/api/indicateurs/groupes")
+            .then(res => {
+                if (!res.ok) throw new Error("Réponse serveur non valide");
+                return res.json();
+            })
+            .then(data => {
+                const container = document.getElementById("resultats-groupe");
+                container.innerHTML = "";
+
+                const tds = Object.keys(data);
+                const scores = tds.map(td => data[td][groupe] ?? 0);
+
+                // Texte
+                for (const td in data) {
+                    const score = data[td][groupe];
+                    if (score !== undefined) {
+                        container.innerHTML += `<p><strong>${td}</strong> → Score moyen du groupe ${groupe}: <b>${score}</b></p>`;
+                    }
+                }
+
+                // Graphique Chart.js
+                const ctx = document.getElementById("scoreChart").getContext("2d");
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: tds,
+                        datasets: [{
+                            label: `Score moyen - ${groupe}`,
+                            data: scores,
+                            backgroundColor: 'steelblue'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => {
+                document.getElementById("resultats-groupe").innerHTML = `<p style="color:red;">Erreur lors du chargement : ${error}</p>`;
+            });
+        }
+    </script>
+
+</body>
+</html>

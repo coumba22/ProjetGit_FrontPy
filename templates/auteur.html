@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Détails pour {{ nom }}</title>
+</head>
+<body>
+    <h1>Statistiques de {{ nom }}</h1>
+    <ul>
+        <li><strong>Commits :</strong> {{ stats.commits }}</li>
+        <li><strong>Additions :</strong> {{ stats.additions }}</li>
+        <li><strong>Suppressions :</strong> {{ stats.deletions }}</li>
+        <li><strong>Fichiers modifiés :</strong> {{ stats.files_changed }}</li>
+    </ul>
+    <a href="{{ url_for('stats_page') }}">⬅ Retour</a>
+</body>
+</html>

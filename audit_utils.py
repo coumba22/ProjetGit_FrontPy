@@ -8,6 +8,8 @@ from pydriller import Repository
 from radon.complexity import cc_visit
 import matplotlib.pyplot as plt
 from datetime import datetime
+import traceback
+import os
 
 def nettoyer_nom_repo(url):
     path = urlparse(url).path
@@ -27,19 +29,36 @@ def inject_token_in_url(repo_url, token):
 
 def lancer_audit(repo_url, token=None, deadline=None):
     repo_name = nettoyer_nom_repo(repo_url)
-    repo_path = os.path.join("temp_repo", repo_name)
+    base_repo_dir = "temp_repo"
+    repo_path = os.path.join(base_repo_dir, repo_name)
     gitstats_output_path = os.path.join("static", "gitstats_report", repo_name)
 
-    shutil.rmtree(repo_path, ignore_errors=True)
-    shutil.rmtree(gitstats_output_path, ignore_errors=True)
+    # Créer dossier base s'il n'existe pas
+    os.makedirs(base_repo_dir, exist_ok=True)
 
     url_to_clone = inject_token_in_url(repo_url, token)
 
-    try:
-        subprocess.check_call(["git", "clone", url_to_clone, repo_path])
-    except subprocess.CalledProcessError:
-        return {"error": "❌ Clonage échoué. Vérifie l'URL ou ton token."}
+    # Si le repo existe déjà, faire un git pull, sinon cloner
+    if os.path.exists(repo_path):
+        try:
+            subprocess.check_call(["git", "-C", repo_path, "pull"])
+        except subprocess.CalledProcessError:
+            # En cas d'erreur on peut tenter de supprimer et recloner
+            shutil.rmtree(repo_path, onerror=on_rm_error)
+            try:
+                subprocess.check_call(["git", "clone", url_to_clone, repo_path])
+            except subprocess.CalledProcessError:
+                return {"error": "❌ Clonage échoué après suppression du dossier existant."}
+    else:
+        try:
+            subprocess.check_call(["git", "clone", url_to_clone, repo_path])
+        except subprocess.CalledProcessError:
+            return {"error": "❌ Clonage échoué. Vérifie l'URL ou ton token."}
 
+    # Nettoyer l'ancien rapport GitStats avant de générer un nouveau
+    shutil.rmtree(gitstats_output_path, ignore_errors=True)
+
+    # --- Reste de ton code inchangé ---
     commits_par_auteur = Counter()
     fichiers_modifies = Counter()
     complexites = {}
@@ -76,7 +95,8 @@ def lancer_audit(repo_url, token=None, deadline=None):
                         except:
                             complexites[fichier] = -1
     except Exception as e:
-        return {"error": f"Erreur d’analyse des commits : {str(e)}"}
+        erreur_complete = traceback.format_exc()
+        return {"error": f"Erreur d’analyse des commits : {erreur_complete}"}
 
     os.makedirs("static/images", exist_ok=True)
     graph_url = "static/images/commits.png"
@@ -120,7 +140,8 @@ def lancer_audit(repo_url, token=None, deadline=None):
         gitstats_url = None
         print("Erreur GitStats :", e)
 
-    shutil.rmtree(repo_path, ignore_errors=True)
+    # On ne supprime plus le repo local pour pouvoir le réutiliser plus tard
+    # shutil.rmtree(repo_path, ignore_errors=True)
 
     return {
         "total_commits": sum(commits_par_auteur.values()),
@@ -132,3 +153,4 @@ def lancer_audit(repo_url, token=None, deadline=None):
         "co_modification": {f: dict(a) for f, a in co_modification.items()},
         "gitstats_url": gitstats_url
     }
+

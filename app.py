@@ -10,11 +10,12 @@ from flask import Flask, render_template, request, redirect, url_for
 import shutil
 import subprocess
 from audit_utils import nettoyer_nom_repo
+import numpy as np
 
 GITSTATS_PATH = r"C:\Users\NCD\AppData\Local\Programs\Python\Python38-32\Scripts\gitstats.exe"
 
 app = Flask(__name__)
-API_URL = "http://127.0.0.1:5000/api/stats"
+API_URL = "http://127.0.0.1:4000/api/stats"
 
 
 
@@ -172,7 +173,7 @@ def indicateurs_graph():
     import matplotlib.pyplot as plt
     import io
 
-    response = requests.get("http://127.0.0.1:5000/api/indicateurs")
+    response = requests.get("http://127.0.0.1:4000/api/indicateurs")
     data = response.json()
 
     plt.figure(figsize=(10, 5))
@@ -206,26 +207,34 @@ def indicateurs_graph():
 
 @app.route('/indicateurs/grouped-graph.png')
 def grouped_scores_graph():
-    response = requests.get("http://127.0.0.1:5000/api/indicateurs/groupes")
+    response = requests.get("http://127.0.0.1:4000/api/indicateurs/groupes")
     data = response.json()
 
-    tds = list(data.keys())
+    tds = sorted(data.keys())  # Par exemple ["1", "3"]
     groupes = set()
-    for td in data:
+    for td in tds:
         groupes.update(data[td].keys())
     groupes = sorted(groupes)
 
-    # Préparer les données par groupe
     width = 0.15
-    x = range(len(tds))
+    x = np.arange(len(tds))
+
     plt.figure(figsize=(10, 5))
 
     for i, groupe in enumerate(groupes):
-        scores = [data[td].get(groupe, 0) for td in tds]
-        offset = [(pos + (i - len(groupes)/2) * width) for pos in x]
+        scores = []
+        for td in tds:
+            val = data[td].get(groupe, 0)
+            try:
+                score = float(val)
+            except (TypeError, ValueError):
+                score = 0
+            scores.append(score)
+
+        offset = x + (i - len(groupes)/2) * width
         plt.bar(offset, scores, width=width, label=groupe)
 
-    plt.xticks(range(len(tds)), tds)
+    plt.xticks(x, tds)
     plt.xlabel("TD")
     plt.ylabel("Score moyen")
     plt.title("Scores par groupe et par TD")
@@ -237,6 +246,7 @@ def grouped_scores_graph():
     buf.seek(0)
     plt.close()
     return Response(buf.getvalue(), mimetype="image/png")
+
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():

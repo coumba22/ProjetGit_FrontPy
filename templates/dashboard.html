@@ -9,6 +9,7 @@
         img { max-width: 100%; border: 1px solid #ddd; margin: 10px 0; }
         .section { margin-top: 40px; }
         .error { color: red; }
+        ul { list-style-type: disc; margin-left: 20px; }
     </style>
 </head>
 <body>
@@ -30,103 +31,103 @@
             <p class="error"><strong>{{ result.error }}</strong></p>
         {% else %}
 
-        <div class="section">
-            <h2>📦 Résumé global</h2>
-            <p><strong>URL analysée :</strong> {{ repo_url }}</p>
-            <p><strong>Total de commits :</strong> {{ result.total_commits }}</p>
-        </div>
+            <!-- Résumé global -->
+            <div class="section">
+                <h2>📦 Résumé global</h2>
+                <p><strong>URL analysée :</strong> {{ repo_url }}</p>
+                <p><strong>Total de commits :</strong> {{ result.total_commits }}</p>
+            </div>
 
-        <div class="section">
-            <h2>👥 Commits par auteur</h2>
-            <img src="/{{ result.graph_url }}" alt="Commits par auteur">
-        </div>
+            <!-- Commits par auteur -->
+            <div class="section">
+                <h2>👥 Commits par auteur</h2>
+                {% if result.commits_par_auteur %}
+                    <img src="/{{ result.graph_url }}" alt="Commits par auteur">
+                    <ul>
+                        {% for auteur, count in result.commits_par_auteur.items() %}
+                            <li>{{ auteur }} : {{ count }} commits</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="color: gray;">Aucune donnée de commits par auteur.</p>
+                {% endif %}
+            </div>
 
-        <div class="section">
-            <h2>📆 Évolution temporelle par auteur</h2>
-            <img src="/static/images/evolution.png" alt="Évolution temporelle des commits">
-        </div>
+            <!-- Évolution temporelle des commits -->
+            <div class="section">
+                <h2>📆 Évolution temporelle des commits</h2>
+                <img src="/static/images/evolution.png" alt="Évolution temporelle des commits">
+                <p style="font-style: italic;">Courbe montrant le nombre de commits par auteur au fil du temps.</p>
+            </div>
 
-        <div class="section">
-            <h2>📁 Fichiers les plus modifiés</h2>
-            <ul>
-                {% for f, count in result.fichiers_critiques %}
-                    <li>{{ f }} : {{ count }} modifications</li>
-                {% endfor %}
-            </ul>
-        </div>
+            <!-- Fichiers les plus modifiés -->
+            <div class="section">
+                <h2>📁 Fichiers les plus modifiés</h2>
+                {% if result.fichiers_critiques %}
+                    <ul>
+                        {% for f, count in result.fichiers_critiques %}
+                            <li>{{ f }} : {{ count }} modifications</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="color: gray;">Aucun fichier modifié recensé.</p>
+                {% endif %}
+            </div>
 
-        <div class="section">
-            <h2>📐 Complexité cyclomatique</h2>
-            <ul>
-                {% for f, score in result.complexites.items() %}
-                    <li>{{ f }} : Complexité {{ score }}</li>
-                {% endfor %}
-            </ul>
-        </div>
+            <!-- Complexité cyclomatique -->
+            <div class="section">
+                <h2>📐 Complexité cyclomatique</h2>
+                {% if result.complexites %}
+                    <ul>
+                        {% for f, score in result.complexites.items() %}
+                            <li>{{ f }} : complexité {{ score }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="color: gray;">Aucune complexité calculée.</p>
+                {% endif %}
+            </div>
 
-        <div class="section">
-            <h2>🤝 Co-modifications</h2>
-            <ul>
-                {% for fichier, auteurs in result.co_modification.items() %}
-                    <li><strong>{{ fichier }}</strong>
-                        <ul>
-                            {% for auteur, fois in auteurs.items() %}
-                                <li>{{ auteur }} : {{ fois }} fois</li>
-                            {% endfor %}
-                        </ul>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
+            <!-- Co-modifications par fichier -->
+            <div class="section">
+                <h2>🤝 Co-modifications</h2>
+                {% if result.co_modification %}
+                    <ul>
+                        {% for fichier, auteurs in result.co_modification.items() %}
+                            <li><strong>{{ fichier }}</strong>
+                                <ul>
+                                    {% for auteur, fois in auteurs.items() %}
+                                        <li>{{ auteur }} : {{ fois }} fois</li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p style="color: gray;">Aucune co-modification détectée.</p>
+                {% endif %}
+            </div>
 
-        <div class="section">
-            <h2>📊 Contribution par auteur</h2>
-            {% set total = 0 %}
-            {% for auteur, data in result.contributions.items() %}
-                {% set total = total + data.ajouts + data.suppressions %}
-            {% endfor %}
-            <ul>
-                {% for auteur, data in result.contributions.items() %}
-                    <li>{{ auteur }} : {{ '%.2f' % data.pourcentage }}% ({{ data.ajouts }} ajoutées, {{ data.suppressions }} supprimées)</li>
-                {% endfor %}
-            </ul>
-        </div>
+            <!-- Rapport GitStats -->
+            <div class="section">
+                <h2>📊 Rapport GitStats</h2>
+                {% if result.gitstats_url %}
+                    <p>
+                        <a href="{{ result.gitstats_url }}" target="_blank">
+                            📂 Voir le rapport complet GitStats
+                        </a>
+                    </p>
+                    <iframe src="{{ result.gitstats_url }}" width="100%" height="800px" style="border: 1px solid #ccc;"></iframe>
+                {% else %}
+                    <p style="color: gray;">GitStats n’a pas pu être généré.</p>
+                {% endif %}
+            </div>
 
-        <div class="section">
-            <h2>📋 Détails commit par commit</h2>
-            <ul>
-                {% for commit in result.commits %}
-                    <li>
-                        <strong>{{ commit.hash[:7] }}</strong> — {{ commit.auteur }} — {{ commit.date }}<br>
-                        <em>{{ commit.message }}</em><br>
-                        Lignes ajoutées : {{ commit.ajouts }} | supprimées : {{ commit.suppressions }}<br>
-                        {% if commit.fichiers %}
-                            <u>Fichiers modifiés :</u>
-                            <ul>
-                                {% for fichier in commit.fichiers %}
-                                    <li>{{ fichier }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
-
-        <div class="section">
-            <h2>📊 Rapport GitStats</h2>
-            {% if result.gitstats_url %}
-                <p><a href="{{ result.gitstats_url }}" target="_blank">📂 Voir le rapport GitStats complet</a></p>
-                <iframe src="{{ result.gitstats_url }}" width="100%" height="800px" style="border: 1px solid #ccc;"></iframe>
-            {% else %}
-                <p style="color:gray;">GitStats n’a pas pu être généré.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>📄 Export</h2>
-            <button onclick="window.location.href='/api/export/pdf'">📤 Télécharger le rapport PDF</button>
-        </div>
+            <!-- Export PDF (placeholder – à adapter si vous implémentez l’endpoint) -->
+            <div class="section">
+                <h2>📄 Export</h2>
+                <button onclick="window.location.href='/api/export/pdf'">📤 Télécharger le rapport PDF</button>
+            </div>
 
         {% endif %}
     {% endif %}

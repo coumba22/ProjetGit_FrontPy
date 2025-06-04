@@ -8,42 +8,67 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from flask import Flask, request, render_template, redirect, url_for, Response
-from audit_utils import lancer_audit, nettoyer_nom_repo
 
+# On importe toutes les fonctions utilitaires inclues dans audit_utils.py
+from audit_utils import (
+    lancer_audit,
+    nettoyer_nom_repo,
+    charger_tds,
+    analyser_classe
+)
+
+# Si vous utilisez GitStats localement, vous pouvez conserver cette constante
 GITSTATS_PATH = r"C:\Users\NCD\AppData\Local\Programs\Python\Python38-32\Scripts\gitstats.exe"
 
 app = Flask(__name__)
+
+# URL de l’API de statistiques (back-end ). 
 API_URL = "http://127.0.0.1:5000/api/stats"
 
 
-# ---------- Page d'accueil ----------
+# ---------- Page d’accueil ----------
 @app.route('/')
 def index():
     return render_template('index.html')
 
 
-# ---------- Routes audit/dashboard ----------
-@app.route("/dashboard", methods=["GET", "POST"])
-@app.route("/audit", methods=["GET", "POST"])
+# ---------- Route pour l’audit « manuel » d’un dépôt unique (micro-UI) ----------
+@app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
-    if request.method == "POST":
-        repo_url = request.form.get("repo_url")
-        token = request.form.get("token")
+    if request.method == 'POST':
+        repo_url = request.form.get('repo_url', '').strip()
+        token = request.form.get('token', '').strip() or None
+
+        if not repo_url:
+            # Si l’utilisateur n’a pas saisi d’URL, on réaffiche l’erreur
+            return render_template('dashboard.html', error="URL manquante.", result=None)
+
+        # Lancer l’audit (PyDriller, Radon, GitStats via API backend…)
         result = lancer_audit(repo_url, token)
-        return render_template("dashboard.html", result=result, repo_url=repo_url)
-    return render_template("dashboard.html", result=None)
+
+        return render_template('dashboard.html', repo_url=repo_url, result=result)
+
+    # GET
+    return render_template('dashboard.html', repo_url=None, result=None)
 
 
-# ---------- GitStats manuel ----------
+
+# ---------- Route de redirection vers GitStats pour un dépôt cloné ----------
 @app.route('/analyser', methods=['POST'])
 def analyser():
+    """
+    Si vous voulez conserver la fonctionnalité « lancer GitStats sur un dépôt cloné » séparément :
+      - clone sous temp_repos/<nom_repo>
+      - exécute GitStats (chemin dans GITSTATS_PATH)
+      - redirige vers /gitstats/<repo>
+    """
     repo_url = request.form.get('repo_url')
     if not repo_url:
         return "URL manquante", 400
 
-    nom_repo = nettoyer_nom_repo(repo_url)
-    clone_path = os.path.join("temp_repo")
-    rapport_path = os.path.join("static", "gitstats_report")
+    nom_repo    = nettoyer_nom_repo(repo_url)
+    clone_path  = os.path.join("temp_repos", nom_repo)
+    rapport_path = os.path.join("static", "gitstats_report", nom_repo)
 
     if os.path.exists(clone_path):
         shutil.rmtree(clone_path)
@@ -65,19 +90,41 @@ def analyser():
 
 @app.route('/gitstats/<repo>')
 def voir_gitstats(repo):
+    """
+    Affiche la page qui contient l’iframe pointant vers static/gitstats_report/<repo>/index.html
+    """
     return render_template('gitstats_view.html', repo=repo)
 
 
-# ---------- Statistiques ----------
+# ---------- Route « Stats de la classe » (multiples dépôts) ----------
 @app.route('/stats')
 def stats_page():
-    response = requests.get(API_URL)
-    data = response.json()
-    return render_template('stats.html', data=data)
+    """
+    Lit tds.json, puis appelle analyser_classe() pour tous les étudiants.
+    Transmet à stats.html un dict { nom_etudiant: résultats }.
+    """
+    # 1) Charger tds.json
+    liste_etudiants, token_communs, deadlines_map = charger_tds()
+
+    # 2) Lancer l’analyse pour chaque étudiant
+    #    (poids par défaut : None)
+    résultats_classe = analyser_classe(
+        liste_etudiants=liste_etudiants,
+        token_communs=token_communs,
+        deadlines=deadlines_map,
+        poids=None
+    )
+
+    return render_template('stats.html', résultats_classe=résultats_classe)
 
 
+# ---------- Détails d’un auteur (route existante) ----------
 @app.route('/stats/auteur/<nom>')
 def auteur_details(nom):
+    """
+    Si vous souhaitez conserver la vue individuelle d’un auteur unique
+    (basée sur l’API externe API_URL), on laisse ce code en l’état.
+    """
     response = requests.get(API_URL)
     data = response.json()
     author_data = data["authors"].get(nom)
@@ -86,16 +133,18 @@ def auteur_details(nom):
     return render_template("auteur.html", nom=nom, stats=author_data)
 
 
+# ---------- Route « graphique commits par auteur » (issue du back-end) ----------
 @app.route('/stats/graph.png')
 def stats_graph():
     response = requests.get(API_URL)
     data = response.json()
+
     authors = list(data["authors"].keys())
     commits = [data["authors"][a]["commits"] for a in authors]
 
     plt.figure(figsize=(8, 4))
-    plt.bar(authors, commits)
-    plt.title('Commits par auteur')
+    plt.bar(authors, commits, color='mediumseagreen')
+    plt.title('Nombre de commits par auteur')
     plt.xlabel('Auteur')
     plt.ylabel('Commits')
 
@@ -103,6 +152,7 @@ def stats_graph():
     plt.savefig(buf, format='png')
     buf.seek(0)
     plt.close()
+
     return Response(buf.getvalue(), mimetype='image/png')
 
 
@@ -114,7 +164,7 @@ def additions_graph():
     additions = [data["authors"][a]["additions"] for a in authors]
 
     plt.figure(figsize=(8, 4))
-    plt.bar(authors, additions)
+    plt.bar(authors, additions, color='dodgerblue')
     plt.title('Additions par auteur')
     plt.xlabel('Auteur')
     plt.ylabel('Lignes ajoutées')
@@ -134,7 +184,7 @@ def deletions_graph():
     deletions = [data["authors"][a]["deletions"] for a in authors]
 
     plt.figure(figsize=(8, 4))
-    plt.bar(authors, deletions)
+    plt.bar(authors, deletions, color='crimson')
     plt.title('Suppressions par auteur')
     plt.xlabel('Auteur')
     plt.ylabel('Lignes supprimées')
@@ -154,7 +204,7 @@ def files_changed_graph():
     files_changed = [data["authors"][a]["files_changed"] for a in authors]
 
     plt.figure(figsize=(8, 4))
-    plt.bar(authors, files_changed)
+    plt.bar(authors, files_changed, color='orange')
     plt.title('Fichiers modifiés par auteur')
     plt.xlabel('Auteur')
     plt.ylabel('Fichiers modifiés')
@@ -166,12 +216,13 @@ def files_changed_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-# ---------- Indicateurs ----------
+# ---------- Indicateurs « TD » (si utilisés) ----------
 @app.route('/indicateurs/graph.png')
 def indicateurs_graph():
     response = requests.get("http://127.0.0.1:5000/api/indicateurs")
     data = response.json()
 
+    plt.figure(figsize=(10, 5))
     auteurs = set()
     for td_data in data.values():
         auteurs.update(td_data.keys())
@@ -181,13 +232,12 @@ def indicateurs_graph():
     width = 0.2
     x = range(len(auteurs))
 
-    plt.figure(figsize=(10, 5))
     for i, td in enumerate(td_names):
         scores = [data[td].get(auteur, {}).get("score", 0) for auteur in auteurs]
         plt.bar([xi + i * width for xi in x], scores, width=width, label=td)
 
     plt.xticks([xi + width for xi in x], auteurs, rotation=45)
-    plt.ylabel("Score")
+    plt.ylabel("Score d'implication")
     plt.title("Scores par auteur et TD")
     plt.legend()
     plt.tight_layout()
@@ -205,7 +255,10 @@ def grouped_scores_graph():
     data = response.json()
 
     tds = list(data.keys())
-    groupes = sorted({g for td in data.values() for g in td})
+    groupes = set()
+    for td in data:
+        groupes.update(data[td].keys())
+    groupes = sorted(groupes)
 
     width = 0.15
     x = range(len(tds))
@@ -213,13 +266,13 @@ def grouped_scores_graph():
 
     for i, groupe in enumerate(groupes):
         scores = [data[td].get(groupe, 0) for td in tds]
-        offsets = [xi + (i - len(groupes)/2) * width for xi in x]
-        plt.bar(offsets, scores, width=width, label=groupe)
+        offset = [(pos + (i - len(groupes)/2) * width) for pos in x]
+        plt.bar(offset, scores, width=width, label=groupe)
 
     plt.xticks(range(len(tds)), tds)
     plt.xlabel("TD")
     plt.ylabel("Score moyen")
-    plt.title("Scores par groupe et TD")
+    plt.title("Scores par groupe et par TD")
     plt.legend()
     plt.tight_layout()
 
@@ -230,7 +283,8 @@ def grouped_scores_graph():
     return Response(buf.getvalue(), mimetype="image/png")
 
 
-# ---------- Lancement ----------
+# ---------- Lancement de l’application ----------
 if __name__ == '__main__':
+    # On s’assure que le dossier d’images existe
     os.makedirs("static/images", exist_ok=True)
     app.run(debug=True, port=5001)

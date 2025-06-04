@@ -22,6 +22,13 @@
         "deadline": "18:00",
         "token": ""
     }
+    ,
+    {
+        "nom": "Pauline",
+        "repo_url": "https://github.com/uha-fr/archiweb_2024_projets_gr05.git",
+        "deadline": "18:00",
+        "token": ""
+    }
 
 
 ]

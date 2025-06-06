@@ -16,10 +16,12 @@ from audit_utils import (
     charger_tds
 )
 
+# Chemin vers l’exécutable gitstats (pour la route /analyser)
 GITSTATS_PATH = r"C:\Users\NCD\AppData\Local\Programs\Python\Python38-32\Scripts\gitstats.exe"
 
 app = Flask(__name__)
-API_URL = "http://127.0.0.1:5000/api/stats"
+API_URL = "http://127.0.0.1:5000/api/stats"  
+# si vous avez un endpoint externe pour stats dépôt unique
 
 
 # ---------- Page d'accueil ----------
@@ -33,32 +35,42 @@ def index():
 def audit():
     """
     Formulaire pour lancer un audit sur un dépôt unique.
-    Redirige ou affiche les résultats dans dashboard.html.
+    Lorsque le formulaire est soumis (POST), on appelle lancer_audit()
+    et on affiche le résultat dans dashboard.html.
     """
     if request.method == 'POST':
         repo_url = request.form.get('repo_url')
         token = request.form.get('token', '')
-        result = lancer_audit(repo_url, token)
+        # (Optionnel) vous pouvez également accepter une date de deadline
+        deadline = request.form.get('deadline', None)
+        result = lancer_audit(repo_url, token, deadline)
         return render_template('dashboard.html', result=result, repo_url=repo_url)
+    # En GET, on affiche simplement un dashboard vide (sans résultat)
     return render_template('dashboard.html', result=None)
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
     """
-    Même fonction que /audit : on reprend juste la logique pour la route /dashboard.
+    Alias de /audit pour supporter les deux URL.
     """
     if request.method == "POST":
         repo_url = request.form.get("repo_url")
         token = request.form.get("token", "")
-        result = lancer_audit(repo_url, token)
+        deadline = request.form.get("deadline", None)
+        result = lancer_audit(repo_url, token, deadline)
         return render_template("dashboard.html", result=result, repo_url=repo_url)
     return render_template("dashboard.html", result=None)
 
 
-# ---------- GitStats (cloner + générer rapport complet) ----------
+# ---------- GitStats : cloner + générer rapport complet ----------
 @app.route('/analyser', methods=['POST'])
 def analyser():
+    """
+    Route qui clone un dépôt et exécute l’exécutable GitStats pour
+    générer le rapport HTML complet. Ensuite, on redirige vers une page
+    qui chargera l’iframe /static/gitstats_report/<repo>/index.html.
+    """
     repo_url = request.form.get('repo_url')
     if not repo_url:
         return "URL manquante", 400
@@ -67,26 +79,34 @@ def analyser():
     clone_path = os.path.join("temp_repos", nom_repo)
     rapport_path = os.path.join("static", "gitstats_report", nom_repo)
 
+    # Suppression des anciens dossiers s’ils existent
     if os.path.exists(clone_path):
         shutil.rmtree(clone_path)
     if os.path.exists(rapport_path):
         shutil.rmtree(rapport_path)
 
+    # 1) Cloner le dépôt
     try:
         subprocess.check_call(["git", "clone", repo_url, clone_path])
-    except subprocess.CalledProcessError:
-        return "Erreur lors du clonage du dépôt", 500
+    except subprocess.CalledProcessError as e:
+        return f"Erreur lors du clonage du dépôt : {e}", 500
 
+    # 2) Exécuter GitStats
     try:
         subprocess.check_call([GITSTATS_PATH, clone_path, rapport_path])
-    except subprocess.CalledProcessError:
-        return "Erreur lors de l'exécution de GitStats", 500
+    except subprocess.CalledProcessError as e:
+        return f"Erreur lors de l'exécution de GitStats : {e}", 500
 
+    # 3) Rediriger vers la vue qui chargera l’iframe du rapport
     return redirect(url_for('voir_gitstats', repo=nom_repo))
 
 
 @app.route('/gitstats/<repo>')
 def voir_gitstats(repo):
+    """
+    Affiche le template gitstats_view.html, qui doit inclure une iframe
+    pointant sur /static/gitstats_report/<repo>/index.html
+    """
     return render_template('gitstats_view.html', repo=repo)
 
 
@@ -95,19 +115,25 @@ def voir_gitstats(repo):
 def stats_page():
     """
     Charge tds.json, analyse chaque dépôt d’étudiant, puis affiche
-    le tableau complet dans stats.html.
+    le tableau complet dans stats.html (avec graphique ‘score global’).
     """
+    # 1) Charger le fichier tds.json
     liste_etudiants, token_communs, deadlines_map = charger_tds()
     if not liste_etudiants:
-        return render_template('stats.html', résultats_classe={})
+        # Si aucun étudiant dans tds.json, on affiche un tableau vide
+        return render_template('stats.html', résultats_classe={}, graph_classe_url=None)
 
-    # On ne passe pas de pondérations ici (None) => valeurs par défaut
+    # 2) Pour chaque étudiant, on appelle analyser_classe
     résultats_classe = analyser_classe(liste_etudiants, token_communs, deadlines_map, poids=None)
 
-    # Générer un graphique « score global par étudiant »
+    # 3) Générer un graphique « Score global par étudiant »
     noms = list(résultats_classe.keys())
-    scores = [résultats_classe[n]["score_global"] if "score_global" in résultats_classe[n] else 0.0 for n in noms]
+    scores = [
+        résultats_classe[n]["score_global"] if "score_global" in résultats_classe[n] else 0.0
+        for n in noms
+    ]
 
+    # Créer le dossier si nécessaire
     os.makedirs("static/images", exist_ok=True)
     graph_classe_path = "static/images/classe_score.png"
     try:
@@ -118,10 +144,12 @@ def stats_page():
         plt.tight_layout()
         plt.savefig(graph_classe_path)
         plt.close()
+        # URL relative à passer au template
         graph_classe_url = "/" + graph_classe_path.replace("\\", "/")
     except Exception:
         graph_classe_url = None
 
+    # 4) Renvoyer le template
     return render_template(
         'stats.html',
         résultats_classe=résultats_classe,
@@ -132,12 +160,12 @@ def stats_page():
 @app.route('/stats/auteur/<nom>')
 def auteur_details(nom):
     """
-    (Optionnel) Si vous souhaitez afficher les détails d’un auteur spécifique
-    au sein de l’analyse d’un dépôt unique.
+    Exemple de route si vous voulez récupérer un auteur spécifique
+    d’un dépôt unique via l’API externe (API_URL). Pas utilisé dans la vue de la classe.
     """
     response = requests.get(API_URL)
     data = response.json()
-    author_data = data["authors"].get(nom)
+    author_data = data.get("authors", {}).get(nom)
     if not author_data:
         return f"Auteur '{nom}' introuvable", 404
     return render_template("auteur.html", nom=nom, stats=author_data)
@@ -148,6 +176,7 @@ def auteur_details(nom):
 def stats_graph():
     response = requests.get(API_URL)
     data = response.json()
+
     authors = list(data["authors"].keys())
     commits = [data["authors"][a]["commits"] for a in authors]
 
@@ -168,6 +197,7 @@ def stats_graph():
 def additions_graph():
     response = requests.get(API_URL)
     data = response.json()
+
     authors = list(data["authors"].keys())
     additions = [data["authors"][a]["additions"] for a in authors]
 
@@ -188,6 +218,7 @@ def additions_graph():
 def deletions_graph():
     response = requests.get(API_URL)
     data = response.json()
+
     authors = list(data["authors"].keys())
     deletions = [data["authors"][a]["deletions"] for a in authors]
 
@@ -208,6 +239,7 @@ def deletions_graph():
 def files_changed_graph():
     response = requests.get(API_URL)
     data = response.json()
+
     authors = list(data["authors"].keys())
     files_changed = [data["authors"][a]["files_changed"] for a in authors]
 
@@ -224,7 +256,7 @@ def files_changed_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-# ---------- Indicateurs (par TD / classe / …) - exemple pour `/stats` de la classe ----------
+# ---------- Indicateurs par TD (pour /stats de la classe) – exemples ----------
 @app.route('/indicateurs/graph.png')
 def indicateurs_graph():
     response = requests.get("http://127.0.0.1:5000/api/indicateurs")

@@ -70,7 +70,11 @@ def nettoyer_nom_repo(url: str) -> str:
 # --------------------------------------------------------------------
 #       Analyse d’un dépôt unique (commande 'lancer_audit')
 # --------------------------------------------------------------------
-def lancer_audit(repo_url: str, token: Optional[str] = None, deadline: Optional[str] = None) -> Dict[str, Any]:
+def lancer_audit(
+    repo_url: str,
+    token: Optional[str] = None,
+    deadline: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Clone le dépôt 'repo_url' dans 'temp_repo', calcule :
       - nombre de commits par auteur,
@@ -81,6 +85,7 @@ def lancer_audit(repo_url: str, token: Optional[str] = None, deadline: Optional[
       - génère des graphes (commits, évolution),
       - appelle l’API GitStats backend pour générer le rapport HTML complet,
       - supprime enfin 'temp_repo'.
+
     Renvoie un dict contenant toutes ces métriques + l’URL vers index.html de GitStats.
     """
     repo_path = "temp_repo"
@@ -158,8 +163,10 @@ def lancer_audit(repo_url: str, token: Optional[str] = None, deadline: Optional[
         plt.tight_layout()
         plt.savefig(graph_path)
         plt.close()
+        # On retourne l’URL relative (sans leading slash, la route Flask l’affichera avec /static/… )
+        graph_url = graph_path.replace("\\", "/")
     except Exception:
-        graph_path = None
+        graph_url = None
 
     # 4.b) Graphe « Évolution temporelle par auteur »
     evo_path = "static/images/evolution.png"
@@ -181,8 +188,9 @@ def lancer_audit(repo_url: str, token: Optional[str] = None, deadline: Optional[
         plt.tight_layout()
         plt.savefig(evo_path)
         plt.close()
-    except Exception as e:
-        print("Erreur génération graphe évolution :", e)
+        evolution_url = evo_path.replace("\\", "/")
+    except Exception:
+        evolution_url = None
 
     fichiers_critiques = fichiers_modifies.most_common(5)
 
@@ -217,11 +225,12 @@ def lancer_audit(repo_url: str, token: Optional[str] = None, deadline: Optional[
         "commits_par_auteur": dict(commits_par_auteur),
         "fichiers_critiques": fichiers_critiques,
         "complexites": complexites,
-        "graph_url": graph_path,
-        "evolution": dict(evolution_par_auteur),
+        "graph_url": graph_url,
+        "evolution_url": evolution_url,
         "co_modification": {f: dict(a) for f, a in co_modification.items()},
         "gitstats_url": gitstats_url
     }
+
 
 # --------------------------------------------------------------------
 #        Analyse « TD par TD » pour un dépôt-étudiant
@@ -230,16 +239,16 @@ def analyser_etudiant(
     nom_etudiant: str,
     repo_url: str,
     token: Optional[str],
-    deadlines_map: Dict[str, str],
+    deadlines_etudiant: Dict[str, str],
     poids: Optional[Dict[str, float]]
 ) -> Dict[str, Any]:
     """
     Pour un étudiant donné :
-      - clone son dépôt dans 'temp_etudiant_<nom>',
+      - clone son dépôt dans 'temp_etudiant_<nom>_<timestamp>',
       - pour chaque commit du samedi (weekday() == 5), calcule
         'ajouts', 'suppressions', 'fichiers touchés', 'score_TD',
         indique s’il est à l’heure ou non (en comparant l’heure du commit
-        à la deadline du samedi),
+        à la deadline de ce samedi tirée de deadlines_etudiant),
       - renvoie un dict :
          {
             "etudiant": "<nom_repo>",
@@ -251,8 +260,9 @@ def analyser_etudiant(
                   "suppressions": S,
                   "fichiers": F,
                   "score": X.X,
+                  "pourcentage": Y.Y,       # % du total de lignes modifiées
                   "a_heure": True/False
-               }, … 
+               }, …
             },
             "total_commits": …,
             "total_ajouts": …,
@@ -264,7 +274,10 @@ def analyser_etudiant(
             "nb_issues_all": …
          }
     """
-    repo_path = f"temp_etudiant_{nettoyer_nom_repo(repo_url)}"
+    base_name = nettoyer_nom_repo(repo_url)
+    # Afin de garder plusieurs clones parallèles, on ajoute timestamp
+    ts = int(time.time())
+    repo_path = f"temp_etudiant_{base_name}_{ts}"
     if os.path.exists(repo_path):
         fermer_processus_git(repo_path)
         shutil.rmtree(repo_path, onerror=on_rm_error)
@@ -287,9 +300,9 @@ def analyser_etudiant(
 
     # 3) Pondérations par défaut si non fournies
     if poids is None:
-        w_c = 1.0    # commit count
-        w_l = 0.5    # lignes ajoutées+supprimées
-        w_f = 0.2    # fichiers touchés
+        w_c = 1.0    # poids sur nombre de commits
+        w_l = 0.5    # poids sur lignes (ajouts + suppressions)
+        w_f = 0.2    # poids sur fichiers touchés
     else:
         w_c = poids.get("commits", 1.0)
         w_l = poids.get("ligne", 0.5)
@@ -313,9 +326,8 @@ def analyser_etudiant(
                     "suppressions": 0,
                     "fichiers": 0,
                     "score": 0.0,
-                    "a_heure": True,
-                    # On pourra plus tard stocker aussi co‐modifications par TD
-                    "co_modif": defaultdict(lambda: defaultdict(int))
+                    "pourcentage": 0.0,
+                    "a_heure": True
                 }
 
             # Incrémenter le nombre de commits pour cette date
@@ -333,25 +345,19 @@ def analyser_etudiant(
                 suppressions += d
                 fichiers_touchés += 1
 
-                # Co‐modifications au niveau du TD (s’il y a d’autres lignes de scripts pour les mêmes fichiers ce même jour,
-                # on pourrait incrémenter TDs[...]["co_modif"][fichier][auteur_committing])
-                # Ici on ne gère pas le détail auteur/auteur, car l’analyse de classe part du principe qu’un seul étudiant par repo.
-
             TDs[date_semaine]["ajouts"] += ajouts
             TDs[date_semaine]["suppressions"] += suppressions
             TDs[date_semaine]["fichiers"] += fichiers_touchés
 
-            # 5) Vérifier si l’étudiant a commis avant la deadline du samedi
-            #    Si deadlines_map contient une clé "global", c’est l’horaire commun à tous les samedis.
-            if "global" in deadlines_map:
-                horaire_limite = deadlines_map["global"]
-                limite_str = f"{date_semaine} {horaire_limite}"
+            # 5) Vérifier si l’étudiant a commis avant la deadline de ce samedi
+            #    deadlines_etudiant est un dict { "YYYY-MM-DD": "HH:MM", … }
+            if date_semaine in deadlines_etudiant:
+                limite_str = f"{date_semaine} {deadlines_etudiant[date_semaine]}"
                 try:
                     dt_limite = datetime.strptime(limite_str, "%Y-%m-%d %H:%M")
                     if dt > dt_limite:
                         TDs[date_semaine]["a_heure"] = False
                 except Exception:
-                    # Si format invalide, on ignore et on garde 'a_heure = True'
                     pass
 
             # 6) Calcul du score pour ce TD
@@ -362,12 +368,25 @@ def analyser_etudiant(
             )
             TDs[date_semaine]["score"] = round(score_TD, 2)
 
-            # 7) Maj totaux
+            # Maj totaux (pour l’instant, on additionne simplement)
+            # --> on ajoutera la logique pour le pourcentage un peu plus bas
             total_commits += TDs[date_semaine]["commits"]
             total_ajouts += TDs[date_semaine]["ajouts"]
             total_suppressions += TDs[date_semaine]["suppressions"]
             total_fichiers += TDs[date_semaine]["fichiers"]
             score_global += score_TD
+
+        # 7) Calculer les pourcentages par TD par rapport au total de lignes modifiées
+        total_lignes = total_ajouts + total_suppressions
+        if total_lignes > 0:
+            for date_semaine, info in TDs.items():
+                lignes_td = info["ajouts"] + info["suppressions"]
+                # % rond à 2 décimales
+                info["pourcentage"] = round(100.0 * lignes_td / total_lignes, 2)
+        else:
+            # Si total_lignes == 0, on garde tous les pourcentages à 0.0
+            for info in TDs.values():
+                info["pourcentage"] = 0.0
 
     except Exception as e:
         return {"error": f"Erreur pendant l’analyse des TDs de {nom_etudiant} : {e}"}
@@ -388,16 +407,15 @@ def analyser_etudiant(
         bres = _get(f"https://api.github.com/repos/{owner}/{repo}/branches", headers=headers)
         if bres.ok:
             nb_branches = len(bres.json())
-        # Pull requests (état TOUT)
+        # Pull requests (toutes)
         pres = _get(f"https://api.github.com/repos/{owner}/{repo}/pulls?state=all", headers=headers)
         if pres.ok:
             nb_pulls_all = len(pres.json())
-        # Issues (état TOUT)
+        # Issues (toutes)
         ires = _get(f"https://api.github.com/repos/{owner}/{repo}/issues?state=all", headers=headers)
         if ires.ok:
             nb_issues_all = len(ires.json())
     except Exception:
-        # Si échec, on garde 0
         pass
 
     # 9) Nettoyage du dépôt local
@@ -408,7 +426,7 @@ def analyser_etudiant(
         print(f"❌ Erreur nettoyage pour {nom_etudiant} : {e}")
 
     return {
-        "etudiant": nettoyer_nom_repo(repo_url),
+        "etudiant": base_name,
         "TDs": TDs,
         "total_commits": total_commits,
         "total_ajouts": total_ajouts,
@@ -420,13 +438,14 @@ def analyser_etudiant(
         "nb_issues_all": nb_issues_all
     }
 
+
 # --------------------------------------------------------------------
 #            Analyse de tous les étudiants (classe entière)
 # --------------------------------------------------------------------
 def analyser_classe(
     liste_etudiants: Dict[str, str],
     token_communs: Optional[Dict[str, str]],
-    deadlines_map: Dict[str, str],
+    deadlines_map: Dict[str, Dict[str, str]],
     poids: Optional[Dict[str, float]]
 ) -> Dict[str, Any]:
     """
@@ -434,34 +453,42 @@ def analyser_classe(
       - pour chaque étudiant, appelle analyser_etudiant(...)
       - stocke le résultat dans un dict { nom_etudiant: résultat }
     Retourne ce dict.
-      liste_etudiants : { "Alice": "https://..alice.git", "Bob": "..." }
-      token_communs   : { "Alice": "ghp_XXX", "Bob": "ghp_YYY" } (optional)
-      deadlines_map   : { "global": "18:00" } ou { "2025-03-07": "18:00", ... }
-      poids           : { "commits": 1.0, "ligne": 0.5, "fichier": 0.2 }
+
+    liste_etudiants : { "Alice": "https://..alice.git", "Bob": "..." }
+    token_communs   : { "Alice": "ghp_XXX", "Bob": "ghp_YYY" } (optional)
+    deadlines_map   : { "Alice": {"2025-03-07":"18:00", ...}, "Bob": {...} }
+    poids           : { "commits": 1.0, "ligne": 0.5, "fichier": 0.2 }
     """
     résultats_totaux: Dict[str, Any] = {}
 
     for nom, url_repo in liste_etudiants.items():
         token = token_communs.get(nom) if token_communs else None
+        # Récupérer le sous-dict de deadlines pour cet étudiant (ou {} si absent)
+        deadlines_etudiant = deadlines_map.get(nom, {})
         try:
             print(f"▶️ Analyse de {nom} ({url_repo}) …")
-            res = analyser_etudiant(nom, url_repo, token, deadlines_map, poids)
+            res = analyser_etudiant(nom, url_repo, token, deadlines_etudiant, poids)
             résultats_totaux[nom] = res
         except Exception as e:
             résultats_totaux[nom] = {"error": f"Exception inattendue pour {nom} : {e}"}
 
     return résultats_totaux
 
+
 # --------------------------------------------------------------------
 #            Chargement du fichier tds.json (liste des étudiants)
 # --------------------------------------------------------------------
-def charger_tds(tds_path: str = "tds.json") -> (Dict[str, str], Dict[str, str], Dict[str, str]):
+def charger_tds(tds_path: str = "tds.json") -> (
+    Dict[str, str],
+    Dict[str, str],
+    Dict[str, Dict[str, str]]
+):
     """
     Ouvre 'tds.json' et retourne :
       - liste_etudiants : { "Alice": "url_repo_Alice", … }
       - token_communs   : { "Alice": "ghp_XXX", … } (seulement s’il y a un token non vide)
-      - deadlines_map   : { "global": "HH:MM" } si tous les TDs ont la même heure de deadline,
-                          ou un mapping précis par date (par ex. { "2025-03-07": "18:00", … }).
+      - deadlines_map   : { "Alice": {"2025-03-07": "18:00", … }, "Bob": {…} }
+
     Si le fichier est absent ou vide, renvoie trois dicts vides.
     """
     if not os.path.exists(tds_path):
@@ -474,20 +501,31 @@ def charger_tds(tds_path: str = "tds.json") -> (Dict[str, str], Dict[str, str], 
 
     liste_etudiants: Dict[str, str] = {}
     token_communs: Dict[str, str] = {}
-    deadlines_map: Dict[str, str] = {}
+    deadlines_map: Dict[str, Dict[str, str]] = {}
 
     for item in data:
         nom = item.get("nom")
         url = item.get("repo_url")
         token = item.get("token", "")
-        deadline = item.get("deadline", "")
+        # On s'attend à deux manières de spécifier les deadlines :
+        # 1) Soit un champ "deadlines" = { "YYYY-MM-DD": "HH:MM", … }
+        # 2) Soit un champ "deadline" = "HH:MM" (identique chaque samedi)
+        raw_dead = item.get("deadlines")
+        single_dead = item.get("deadline")
+
         if nom and url:
             liste_etudiants[nom] = url
             if token:
                 token_communs[nom] = token
-            if deadline:
-                # On stocke en clé "global" l’horaire de deadline si c’est le même pour tous
-                # Si vous voulez gérer date par date, remplacer cette logique.
-                deadlines_map["global"] = deadline
+
+            if isinstance(raw_dead, dict):
+                # l'utilisateur a fourni un dict date->horaire
+                deadlines_map[nom] = raw_dead
+            elif isinstance(single_dead, str) and single_dead.strip():
+                # on considère que tous les samedis, la deadline est la même
+                # on la stocke sous la clé spéciale "global" en interne
+                deadlines_map[nom] = {"global": single_dead.strip()}
+            else:
+                deadlines_map[nom] = {}
 
     return liste_etudiants, token_communs, deadlines_map

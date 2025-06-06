@@ -9,6 +9,10 @@
         img { max-width: 100%; border: 1px solid #ddd; margin: 10px 0; }
         .section { margin-top: 40px; }
         .error { color: red; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+        th { background: #f0f0f0; }
+        .small-note { font-size: 0.9em; color: #555; }
     </style>
 </head>
 <body>
@@ -29,7 +33,6 @@
         {% if result.error %}
             <p class="error"><strong>{{ result.error }}</strong></p>
         {% else %}
-
             <div class="section">
                 <h2>📦 Résumé global</h2>
                 <p><strong>URL analysée :</strong> {{ repo_url }}</p>
@@ -39,7 +42,7 @@
             <div class="section">
                 <h2>👥 Commits par auteur</h2>
                 {% if result.graph_url %}
-                    <img src="/{{ result.graph_url }}" alt="Commits par auteur">
+                    <img src="{{ result.graph_url }}" alt="Commits par auteur">
                 {% else %}
                     <p style="color:gray;">Graphique non disponible.</p>
                 {% endif %}
@@ -47,8 +50,11 @@
 
             <div class="section">
                 <h2>📆 Évolution temporelle par auteur</h2>
-                <img src="/static/images/evolution.png" alt="Évolution temporelle des commits">
-                <p style="font-style: italic;">(Bleu = avant deadline, Noir = deadline)</p>
+                {% if result.evolution_url %}
+                    <img src="{{ result.evolution_url }}" alt="Évolution temporelle">
+                {% else %}
+                    <p style="color:gray;">Graphique non disponible.</p>
+                {% endif %}
             </div>
 
             <div class="section">
@@ -66,22 +72,59 @@
                     {% for f, score in result.complexites.items() %}
                         <li>{{ f }} : Complexité {{ score }}</li>
                     {% endfor %}
+                    {% if result.complexites|length == 0 %}
+                        <li>Aucun fichier .py analysé.</li>
+                    {% endif %}
                 </ul>
             </div>
 
             <div class="section">
                 <h2>🤝 Co-modifications</h2>
-                <ul>
-                    {% for fichier, auteurs in result.co_modification.items() %}
-                        <li><strong>{{ fichier }}</strong>
-                            <ul>
-                                {% for auteur, fois in auteurs.items() %}
-                                    <li>{{ auteur }} : {{ fois }} fois</li>
-                                {% endfor %}
-                            </ul>
-                        </li>
-                    {% endfor %}
-                </ul>
+                {% if result.co_modification %}
+                    <ul>
+                        {% for fichier, auteurs in result.co_modification.items() %}
+                            <li><strong>{{ fichier }}</strong>
+                                <ul>
+                                    {% for auteur, fois in auteurs.items() %}
+                                        <li>{{ auteur }} : {{ fois }} fois</li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Aucune co-modification.</p>
+                {% endif %}
+            </div>
+
+            <div class="section">
+                <h2>✏️ Contributions par auteur (lignes)</h2>
+                {% if result.lines_changed_per_author %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Auteur</th>
+                                <th>Ajouts</th>
+                                <th>Suppressions</th>
+                                <th>Total lignes</th>
+                                <th>% de contribution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for auteur, total in result.lines_changed_per_author.items() %}
+                                <tr>
+                                    <td>{{ auteur }}</td>
+                                    <td>{{ result.lines_added_per_author.get(auteur, 0) }}</td>
+                                    <td>{{ result.lines_deleted_per_author.get(auteur, 0) }}</td>
+                                    <td>{{ total }}</td>
+                                    <td>{{ result.percentages.get(auteur, 0.0) }} %</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p style="color:gray;">Aucune modification de lignes détectée.</p>
+                {% endif %}
             </div>
 
             <div class="section">
@@ -93,12 +136,6 @@
                     <p style="color:gray;">GitStats n’a pas pu être généré.</p>
                 {% endif %}
             </div>
-
-            <div class="section">
-                <h2>📄 Export</h2>
-                <button onclick="window.location.href='/api/export/pdf'">📤 Télécharger le rapport PDF</button>
-            </div>
-
         {% endif %}
     {% endif %}
 

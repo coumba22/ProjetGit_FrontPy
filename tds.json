@@ -1,34 +1,24 @@
 [{
-        "nom": "Coumba Diagne",
-        "repo_url": "https://github.com/uha-fr/archiweb_2025_tds_gr1_ndeye-coumba.diagne_webapp",
-        "deadline": "18:00",
-        "token": ""
-    },
-    {
-        "nom": "Assil",
+        "nom": "Barvooo",
         "repo_url": "https://github.com/uha-fr/endyear_2025_gr01_mobileapp.git",
         "deadline": "18:00",
         "token": ""
     },
     {
-        "nom": "Diop",
-        "repo_url": "https://github.com/uha-fr/archiweb_2025_projets_gr02.git",
+        "nom": "Assil",
+        "repo_url": "https://github.com/uha-fr/archiweb_2025_projets_gr02",
         "deadline": "18:00",
         "token": ""
     },
+
     {
-        "nom": "Adecr",
-        "repo_url": "https://github.com/uha-fr/archiweb_2024_projets_gr01.git",
-        "deadline": "18:00",
+        "nom": "Coumba Diagne",
+        "repo_url": "https://github.com/uha-fr/archiweb_2025_tds_gr1_ndeye-coumba.diagne_webapp",
+        "deadlines": {
+            "2025-01-07": "17:00",
+            "2025-03-14": "18:00",
+            "2025-03-21": "19:00"
+        },
         "token": ""
     }
-    ,
-    {
-        "nom": "Pauline",
-        "repo_url": "https://github.com/uha-fr/archiweb_2024_projets_gr05.git",
-        "deadline": "18:00",
-        "token": ""
-    }
-
-
 ]

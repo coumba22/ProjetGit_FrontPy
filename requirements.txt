@@ -4,3 +4,12 @@ matplotlib
 seaborn
 radon
 gitpython
+requests
+psutil
+
+#Flask>=2.0
+#pydriller>=1.25.0
+#radon>=5.1.0
+#matplotlib>=3.0
+#requests>=2.25.0
+#psutil>=5.8.0

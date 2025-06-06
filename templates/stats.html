@@ -10,15 +10,18 @@
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
     th { background: #f0f0f0; }
     .total-row { font-weight: bold; background: #fafafa; }
+    .graph-container { margin-bottom: 40px; }
+    .graph-container img { max-width: 100%; height: auto; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
   <h1>📊 Résultats de la classe</h1>
 
+  {# Affiche le graphique global si app.py a défini graph_classe_url #}
   {% if graph_classe_url %}
-    <div>
+    <div class="graph-container">
       <h2>Score global par étudiant</h2>
-      <img src="{{ graph_classe_url }}" alt="Score global par étudiant" style="max-width: 600px;">
+      <img src="{{ graph_classe_url }}" alt="Score global par étudiant">
     </div>
   {% endif %}
 
@@ -48,7 +51,11 @@
             {% for date_TD, td_info in data.TDs.items() %}
               <tr>
                 <td>{{ nom }}</td>
-                <td>{{ date_TD }}<br/><small>({{ td_info.date_commit }})</small></td>
+                <td>
+                  {{ date_TD }}
+                  <br/>
+                  <small>({{ td_info.date_commit }})</small>
+                </td>
                 <td>{{ td_info.commits }}</td>
                 <td>{{ td_info.ajouts }}</td>
                 <td>{{ td_info.suppressions }}</td>
@@ -74,6 +81,7 @@
     <p>Aucun étudiant validé (tds.json est absent ou vide).</p>
   {% endif %}
 
+  {# Affichage détaillé, par étudiant, avec branches / pulls / issues #}
   {% if résultats_classe %}
     {% for nom, data in résultats_classe.items() %}
       {% if not data.error %}
@@ -99,6 +107,7 @@
             <th>Fichiers touchés</th>
             <th>Score TD</th>
             <th>À l’heure ?</th>
+            <th>% Lignes</th>
           </tr>
           {% for date_td, td_info in data.TDs.items() %}
             <tr>
@@ -109,6 +118,7 @@
               <td>{{ td_info.fichiers }}</td>
               <td>{{ td_info.score }}</td>
               <td>{{ "✅" if td_info.a_heure else "❌" }}</td>
+              <td>{{ td_info.pourcentage }}%</td>
             </tr>
           {% endfor %}
         </table>

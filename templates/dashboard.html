@@ -1,143 +1,132 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Audit complet de dépôt GitHub</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1, h2, h3 { color: #2c3e50; }
-        img { max-width: 100%; border: 1px solid #ddd; margin: 10px 0; }
-        .section { margin-top: 40px; }
-        .error { color: red; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-        th { background: #f0f0f0; }
-        .small-note { font-size: 0.9em; color: #555; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Audit complet de dépôt GitHub</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { color: #2c3e50; }
+    img { max-width: 100%; border: 1px solid #ddd; margin: 10px 0; }
+    .section { margin-top: 40px; }
+    .error { color: red; }
+    .added { color: green; }
+    .deleted { color: crimson; }
+    .empty { color: gray; font-style: italic; }
+  </style>
 </head>
 <body>
 
-    <h1>📊 Audit automatique d’un dépôt GitHub</h1>
+  <h1>📊 Audit automatique d’un dépôt GitHub</h1>
 
-    <form method="post" action="/dashboard">
-        <label>URL du dépôt :</label><br>
-        <input type="text" name="repo_url" required placeholder="https://github.com/user/repo"><br><br>
+  <form method="post" action="/dashboard">
+    <label>URL du dépôt :</label><br>
+    <input type="text" name="repo_url" required placeholder="https://github.com/user/repo"><br><br>
+    <label>Token GitHub (optionnel) :</label><br>
+    <input type="text" name="token" placeholder="ghp_..."><br><br>
+    <button type="submit">Analyser</button>
+  </form>
 
-        <label>Token GitHub (optionnel) :</label><br>
-        <input type="text" name="token" placeholder="ghp_..."><br><br>
+  {% if result %}
+    {% if result.error %}
+      <p class="error"><strong>{{ result.error }}</strong></p>
+    {% else %}
 
-        <button type="submit">Analyser</button>
-    </form>
+      <div class="section">
+        <h2>📦 Résumé global</h2>
+        <p><strong>URL :</strong> {{ repo_url }}</p>
+        <p><strong>Total commits :</strong> {{ result.total_commits }}</p>
+      </div>
 
-    {% if result %}
-        {% if result.error %}
-            <p class="error"><strong>{{ result.error }}</strong></p>
+      <div class="section">
+        <h2>✏️ Contributions par auteur (lignes)</h2>
+        {% if result.contributions %}
+          <ul>
+            {% for auteur, data in result.contributions.items() %}
+              <li>
+                <strong>{{ auteur }}</strong> :
+                <span class="added">+{{ data.added }}</span> /
+                <span class="deleted">−{{ data.deleted }}</span>
+                (total {{ data.total }} lignes → {{ data.percent }} %)
+              </li>
+            {% endfor %}
+          </ul>
         {% else %}
-            <div class="section">
-                <h2>📦 Résumé global</h2>
-                <p><strong>URL analysée :</strong> {{ repo_url }}</p>
-                <p><strong>Total de commits :</strong> {{ result.total_commits }}</p>
-            </div>
-
-            <div class="section">
-                <h2>👥 Commits par auteur</h2>
-                {% if result.graph_url %}
-                    <img src="{{ result.graph_url }}" alt="Commits par auteur">
-                {% else %}
-                    <p style="color:gray;">Graphique non disponible.</p>
-                {% endif %}
-            </div>
-
-            <div class="section">
-                <h2>📆 Évolution temporelle par auteur</h2>
-                {% if result.evolution_url %}
-                    <img src="{{ result.evolution_url }}" alt="Évolution temporelle">
-                {% else %}
-                    <p style="color:gray;">Graphique non disponible.</p>
-                {% endif %}
-            </div>
-
-            <div class="section">
-                <h2>📁 Fichiers les plus modifiés</h2>
-                <ul>
-                    {% for f, count in result.fichiers_critiques %}
-                        <li>{{ f }} : {{ count }} modifications</li>
-                    {% endfor %}
-                </ul>
-            </div>
-
-            <div class="section">
-                <h2>📐 Complexité cyclomatique</h2>
-                <ul>
-                    {% for f, score in result.complexites.items() %}
-                        <li>{{ f }} : Complexité {{ score }}</li>
-                    {% endfor %}
-                    {% if result.complexites|length == 0 %}
-                        <li>Aucun fichier .py analysé.</li>
-                    {% endif %}
-                </ul>
-            </div>
-
-            <div class="section">
-                <h2>🤝 Co-modifications</h2>
-                {% if result.co_modification %}
-                    <ul>
-                        {% for fichier, auteurs in result.co_modification.items() %}
-                            <li><strong>{{ fichier }}</strong>
-                                <ul>
-                                    {% for auteur, fois in auteurs.items() %}
-                                        <li>{{ auteur }} : {{ fois }} fois</li>
-                                    {% endfor %}
-                                </ul>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>Aucune co-modification.</p>
-                {% endif %}
-            </div>
-
-            <div class="section">
-                <h2>✏️ Contributions par auteur (lignes)</h2>
-                {% if result.lines_changed_per_author %}
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Auteur</th>
-                                <th>Ajouts</th>
-                                <th>Suppressions</th>
-                                <th>Total lignes</th>
-                                <th>% de contribution</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for auteur, total in result.lines_changed_per_author.items() %}
-                                <tr>
-                                    <td>{{ auteur }}</td>
-                                    <td>{{ result.lines_added_per_author.get(auteur, 0) }}</td>
-                                    <td>{{ result.lines_deleted_per_author.get(auteur, 0) }}</td>
-                                    <td>{{ total }}</td>
-                                    <td>{{ result.percentages.get(auteur, 0.0) }} %</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                {% else %}
-                    <p style="color:gray;">Aucune modification de lignes détectée.</p>
-                {% endif %}
-            </div>
-
-            <div class="section">
-                <h2>📊 Rapport GitStats</h2>
-                {% if result.gitstats_url %}
-                    <p><a href="{{ result.gitstats_url }}" target="_blank">📂 Voir le rapport GitStats complet</a></p>
-                    <iframe src="{{ result.gitstats_url }}" width="100%" height="800px" style="border: 1px solid #ccc;"></iframe>
-                {% else %}
-                    <p style="color:gray;">GitStats n’a pas pu être généré.</p>
-                {% endif %}
-            </div>
+          <p class="empty">Aucune modification de lignes détectée.</p>
         {% endif %}
+      </div>
+
+      <div class="section">
+        <h2>👥 Commits par auteur</h2>
+        {% if result.graph_url %}
+          <img src="/{{ result.graph_url }}" alt="Commits par auteur">
+        {% else %}
+          <p class="empty">Graphique non disponible.</p>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <h2>📆 Évolution temporelle</h2>
+        {% if result.evolution_url %}
+          <img src="/{{ result.evolution_url }}" alt="Évolution temporelle des commits">
+        {% else %}
+          <p class="empty">Graphique non disponible.</p>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <h2>📁 Fichiers les plus modifiés</h2>
+        <ul>
+          {% for f, c in result.fichiers_critiques %}
+            <li>{{ f }} : {{ c }} modifications</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>📐 Complexité cyclomatique (Top 10)</h2>
+        {% if result.complexites %}
+          <ul>
+            {% for f, score in result.complexites.items() %}
+              <li>{{ f }} : Complexité {{ score }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Aucun fichier analysé (ou pas de fichiers .py dans le dépôt).</p>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <h2>🤝 Co-modifications</h2>
+        {% if result.co_modification %}
+          <ul>
+            {% for f, auteurs in result.co_modification.items() %}
+              <li><strong>{{ f }}</strong>
+                <ul>
+                  {% for au, fois in auteurs.items() %}
+                    <li>{{ au }} : {{ fois }} fois</li>
+                  {% endfor %}
+                </ul>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">Aucune co-modification détectée.</p>
+        {% endif %}
+      </div>
+
+      <div class="section">
+        <h2>📊 Rapport GitStats</h2>
+        {% if result.gitstats_url %}
+          <p><a href="{{ result.gitstats_url }}" target="_blank">Voir le rapport GitStats complet</a></p>
+          <iframe src="{{ result.gitstats_url }}" width="100%" height="800px"
+                  style="border:1px solid #ccc;"></iframe>
+        {% else %}
+          <p class="empty">GitStats n’a pas pu être généré.</p>
+        {% endif %}
+      </div>
+
     {% endif %}
+  {% endif %}
 
 </body>
 </html>

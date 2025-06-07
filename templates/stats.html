@@ -93,9 +93,14 @@
           <li>Total fichiers touchés : {{ data.total_fichiers }}</li>
           <li>Score global : {{ data.score_global }}</li>
           <li>Branches : {{ data.nb_branches }}</li>
-          <li>Pull requests (toutes) : {{ data.nb_pulls_all }}</li>
           <li>Issues (toutes) : {{ data.nb_issues_all }}</li>
-        </ul>
+          <li>Pull request total : {{ data.nb_pr_total }} (ouvertes : {{ data.nb_pr_open }}, fermées : {{ data.nb_pr_closed }}, mergées : {{ data.nb_pr_merged }})</li>
+          <li>Code reviews : {{ data.nb_reviews }}</li>
+          <li>Activité CI/CD (GitHub Actions): {{ data.nb_ci_total }} (run reussi {{ data.nb_ci_success }} / run echoué {{ data.nb_ci_failure }})</li>
+          {#  Total de runs : le nombre total d’exécutions de vos workflows (à chaque push, PR, merge, etc.).#}
+        {#Réussites : parmi ces exécutions, combien se sont terminées sans erreur (tous les tests verts, build OK).#}
+        {#Échecs : le nombre d’exécutions qui se sont soldées par une erreur (compilation ratée, tests qui échouent, lint qui casse, etc.).#}
+      </ul>
 
         <h3>Détail des TDs</h3>
         <table>

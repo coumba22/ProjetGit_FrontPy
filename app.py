@@ -326,4 +326,5 @@ def grouped_scores_graph():
 # ---------- Lancement de l’application ----------
 if __name__ == '__main__':
     os.makedirs("static/images", exist_ok=True)
-    app.run(debug=True, port=5001)
+    app.run(debug=True, use_reloader=False, port=5001)
+

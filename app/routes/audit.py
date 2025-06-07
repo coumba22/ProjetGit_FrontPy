@@ -1,29 +1,27 @@
-import os
-import io
-import json
 import requests
-import shutil
-import subprocess
+import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from draw_graphs import class_score_graph, evolution_graph, commit_graph 
-
-from flask import Flask, request, render_template, redirect, url_for, Response
-from flask import current_app as app
-from audit_utils import (
-    lancer_audit,
+from ..draw_graphs import evolution_graph, commit_graph 
+from flask import Flask, request, render_template
+from ..audit_utils import (
+    lancer_audit
 )
 
-API_URL = "http://127.0.0.1:5000/api/stats"  
+from flask import Blueprint
+audit_bp = Blueprint('audit_bp', __name__)
+
+BACKEND_PORT = os.getenv("BACKEND_PORT")
+AUDIT_API_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/audit"
 # si vous avez un endpoint externe pour stats dépôt unique
-AUDIT_API_URL = "http://127.0.0.1:4000/api/audit" 
+
 
 
 
 # ---------- Audit d’un dépôt unique (dashboard) ----------
-@app.route('/audit', methods=['GET', 'POST'])
-def audit():
+@audit_bp.route('/audit', methods=['GET', 'POST'])
+def audit_depot():
     """
     Formulaire pour lancer un audit sur un dépôt unique.
     Lorsque le formulaire est soumis (POST), on appelle lancer_audit()
@@ -56,7 +54,7 @@ def audit():
     )
 
 
-@app.route('/dashboard', methods=['GET', 'POST'])
+@audit_bp.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
     """
     Alias de /audit pour supporter les deux URL.

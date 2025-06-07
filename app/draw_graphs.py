@@ -3,6 +3,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
+from flask import current_app as app
+
 
 def class_score_graph(resultats_classe):
     # 3) Générer un graphique « Score global par étudiant »
@@ -12,8 +14,6 @@ def class_score_graph(resultats_classe):
         for n in noms
     ]
 
-    # Créer le dossier si nécessaire
-    os.makedirs("static/images", exist_ok=True)
     graph_classe_path = "static/images/classe_score.png"
     try:
         plt.figure(figsize=(8, 4))
@@ -27,6 +27,8 @@ def class_score_graph(resultats_classe):
         graph_classe_url = "/" + graph_classe_path.replace("\\", "/")
     except Exception:
         graph_classe_url = None
+
+    app.logger.debug(graph_classe_url)
     return graph_classe_url
 
 def commit_graph(result_audit):
@@ -34,8 +36,6 @@ def commit_graph(result_audit):
     commits_par_auteur = result_audit['commits_par_auteur']
     base_name = result_audit['base_name']
 
-    # Création dossier images
-    os.makedirs("static/images", exist_ok=True)
 
     # Graph Commits
     try:
@@ -44,7 +44,7 @@ def commit_graph(result_audit):
         ax.set_title("Commits par auteur")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
-        p = f"static/images/{base_name}_commits.png"
+        p = f"app/static/images/{base_name}_commits.png"
         plt.savefig(p); plt.close(fig)
         graph_commits_url = p.replace("\\", "/")
     except:
@@ -58,8 +58,6 @@ def evolution_graph(result_audit):
     deadline = result_audit['deadline']
     base_name = result_audit['base_name']
 
-    # Création dossier images
-    os.makedirs("static/images", exist_ok=True)
 
     # Graph Évolution
     try:
@@ -77,7 +75,7 @@ def evolution_graph(result_audit):
         ax.tick_params(axis='x', rotation=45)
         ax.legend()
         plt.tight_layout()
-        p2 = f"static/images/{base_name}_evolution.png"
+        p2 = f"app/static/images/{base_name}_evolution.png"
         plt.savefig(p2); plt.close(fig)
         graph_evolution_url = p2.replace("\\", "/")
     except:

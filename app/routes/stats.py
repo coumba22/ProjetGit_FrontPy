@@ -7,41 +7,42 @@ import subprocess
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from draw_graphs import class_score_graph, evolution_graph, commit_graph 
+from ..draw_graphs import class_score_graph, evolution_graph, commit_graph 
 
 from flask import Flask, request, render_template, redirect, url_for, Response
 from flask import current_app as app
 
-API_URL = "http://127.0.0.1:5000/api/stats"  
 # si vous avez un endpoint externe pour stats dépôt unique
-STATS_API_URL = "http://127.0.0.1:4000/api/stats" 
-AUDIT_API_URL = "http://127.0.0.1:4000/api/audit" 
+BACKEND_PORT = os.getenv("BACKEND_PORT")
+STATS_API_URL = f"http://127.0.0.1:{BACKEND_PORT}/api/stats"
+
+from flask import Blueprint
+stats_bp = Blueprint('stats_bp', __name__)
 
 
 # ---------- Statistiques de la classe ----------
-@app.route('/stats')
+@stats_bp.route('/stats')
 def stats_page():
     stats_response = requests.post(STATS_API_URL)
 
     try:
         resultats_classe = stats_response.json()
-        app.logger.debug(f"Réponse stast : {resultats_classe}")
     except Exception:
         return f"Erreur JSONDecode lors de l'analyse des stats : contenu reçu = {stats_response.text}"
     if not stats_response.ok or resultats_classe.get("status") != "success":
         return f"Erreur lors de l'analyse des stats : {stats_response.text}"
 
-    graph_classe_url= class_score_graph(resultats_classe)
+    graph_classe_url= class_score_graph(resultats_classe['resultatsClasse'])
 
     # 4) Renvoyer le template
     return render_template(
         'stats.html',
-        resultats_classe=resultats_classe,
+        resultats_classe=resultats_classe['resultatsClasse'],
         graph_classe_url=graph_classe_url
     )
 
 
-@app.route('/stats/auteur/<nom>')
+@stats_bp.route('/stats/auteur/<nom>')
 def auteur_details(nom):
     """
     Exemple de route si vous voulez récupérer un auteur spécifique
@@ -58,7 +59,7 @@ def auteur_details(nom):
 
 
 # ---------- Routes pour afficher les images des statistiques d’un dépôt unique ----------
-@app.route('/stats/graph.png')
+@stats_bp.route('/stats/graph.png')
 def stats_graph():
     response = requests.get(API_URL)
     data = response.json()
@@ -79,7 +80,7 @@ def stats_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-@app.route('/stats/additions.png')
+@stats_bp.route('/stats/additions.png')
 def additions_graph():
     response = requests.get(API_URL)
     data = response.json()
@@ -100,7 +101,7 @@ def additions_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-@app.route('/stats/deletions.png')
+@stats_bp.route('/stats/deletions.png')
 def deletions_graph():
     response = requests.get(API_URL)
     data = response.json()
@@ -121,7 +122,7 @@ def deletions_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-@app.route('/stats/files_changed.png')
+@stats_bp.route('/stats/files_changed.png')
 def files_changed_graph():
     response = requests.get(API_URL)
     data = response.json()

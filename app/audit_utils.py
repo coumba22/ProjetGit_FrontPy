@@ -165,9 +165,6 @@ def lancer_audit(
         pct = round(100 * info["total"] / total_changed, 2) if total_changed > 0 else 0.0
         info["percent"] = pct
 
-    # Création dossier images
-    os.makedirs("static/images", exist_ok=True)
-
     # Graph Commits
     try:
         fig, ax = plt.subplots(figsize=(8,4))
@@ -175,7 +172,7 @@ def lancer_audit(
         ax.set_title("Commits par auteur")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
-        p = f"static/images/commits_{timestamp}_{base_name}.png"
+        p = f"app/static/images/commits_{base_name}.png"
         plt.savefig(p); plt.close(fig)
         graph_url = p.replace("\\", "/")
     except:
@@ -197,7 +194,7 @@ def lancer_audit(
         ax.tick_params(axis='x', rotation=45)
         ax.legend()
         plt.tight_layout()
-        p2 = f"static/images/evolution_{timestamp}_{base_name}.png"
+        p2 = f"app/static/images/evolution_{base_name}.png"
         plt.savefig(p2); plt.close(fig)
         evolution_url = p2.replace("\\", "/")
     except:
@@ -209,7 +206,7 @@ def lancer_audit(
     gitstats_url = None
     try:
         resp = requests.post(
-            "http://127.0.0.1:5000/api/gitstats",
+            "http://127.0.0.1:{FRONTEND_PORT}/api/gitstats",
             json={
                 "repo_path": os.path.abspath(repo_path),
                 "output_path": os.path.abspath(gitstats_output_path)

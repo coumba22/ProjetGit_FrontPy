@@ -7,18 +7,21 @@ import subprocess
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from draw_graphs import class_score_graph, evolution_graph, commit_graph 
+from ..draw_graphs import class_score_graph, evolution_graph, commit_graph 
 
 from flask import Flask, request, render_template, redirect, url_for, Response
 from flask import current_app as app
-from audit_utils import (
+from ..audit_utils import (
     lancer_audit,
 )
 
+from flask import Blueprint
+indicateurs_bp = Blueprint('indicateurs_bp', __name__)
+
 # ---------- Indicateurs par TD (pour /stats de la classe) – exemples ----------
-@app.route('/indicateurs/graph.png')
+@indicateurs_bp.route('/indicateurs/graph.png')
 def indicateurs_graph():
-    response = requests.get("http://127.0.0.1:5000/api/indicateurs")
+    response = requests.get("http://127.0.0.1:{FRONTEND_PORT}/api/indicateurs")
     data = response.json()
 
     plt.figure(figsize=(10, 5))
@@ -48,9 +51,9 @@ def indicateurs_graph():
     return Response(buf.getvalue(), mimetype='image/png')
 
 
-@app.route('/indicateurs/grouped-graph.png')
+@indicateurs_bp.route('/indicateurs/grouped-graph.png')
 def grouped_scores_graph():
-    response = requests.get("http://127.0.0.1:5000/api/indicateurs/groupes")
+    response = requests.get("http://127.0.0.1:{FRONTEND_PORT}/api/indicateurs/groupes")
     data = response.json()
 
     tds = list(data.keys())

@@ -6,6 +6,7 @@ radon
 gitpython
 requests
 psutil
+python-dotenv
 
 #Flask>=2.0
 #pydriller>=1.25.0

@@ -6,9 +6,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from flask import current_app as app
 from flask import Flask, request, render_template, redirect, url_for, Response
-from audit_utils import (
+from ..audit_utils import (
     lancer_audit,
     nettoyer_nom_repo,
     analyser_classe,
@@ -18,11 +17,12 @@ from audit_utils import (
 # Chemin vers l’exécutable gitstats (pour la route /analyser)
 GITSTATS_PATH = r"C:\Users\NCD\AppData\Local\Programs\Python\Python38-32\Scripts\gitstats.exe"
 
-
+from flask import Blueprint
+gitstats_bp = Blueprint('gitstats_bp', __name__)
 
 
 # ---------- GitStats : cloner + générer rapport complet ----------
-@app.route('/analyser', methods=['POST'])
+@gitstats_bp.route('/analyser', methods=['POST'])
 def analyser():
     """
     Route qui clone un dépôt et exécute l’exécutable GitStats pour
@@ -59,7 +59,7 @@ def analyser():
     return redirect(url_for('voir_gitstats', repo=nom_repo))
 
 
-@app.route('/gitstats/<repo>')
+@gitstats_bp.route('/gitstats/<repo>')
 def voir_gitstats(repo):
     """
     Affiche le template gitstats_view.html, qui doit inclure une iframe

@@ -1,18 +1,16 @@
 import os
-from flask import Flask, request, render_template
 
-app = Flask(__name__)
-from routes import audit, gitstats, indicateurs, stats
+from dotenv import load_dotenv
+load_dotenv()
 
+from app import create_app
+app = create_app()
 
-# ---------- Page d'accueil ----------
-@app.route('/')
-def index():
-    return render_template('index.html')
+BACKEND_PORT = os.getenv("BACKEND_PORT")
+FRONTEND_PORT  = os.getenv("FRONTEND_PORT")
 
 
 # ---------- Lancement de l’application ----------
 if __name__ == '__main__':
-    os.makedirs("static/images", exist_ok=True)
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=FRONTEND_PORT)
 

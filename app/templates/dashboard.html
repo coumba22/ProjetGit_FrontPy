@@ -18,7 +18,7 @@
 
   <h1>📊 Audit automatique d’un dépôt GitHub</h1>
 
-  <form method="post" action="/dashboard">
+  <form method="post" action="/audit">
     <label>URL du dépôt :</label><br>
     <input type="text" name="repo_url" required placeholder="https://github.com/user/repo"><br><br>
     <label>Token GitHub (optionnel) :</label><br>
@@ -57,8 +57,8 @@
 
       <div class="section">
         <h2>👥 Commits par auteur</h2>
-        {% if result.graph_url %}
-          <img src="/{{ result.graph_url }}" alt="Commits par auteur">
+        {% if graph_commit_url %}
+          <img src="{{ graph_commit_url }}" alt="Commits par auteur">
         {% else %}
           <p class="empty">Graphique non disponible.</p>
         {% endif %}
@@ -66,8 +66,8 @@
 
       <div class="section">
         <h2>📆 Évolution temporelle</h2>
-        {% if result.evolution_url %}
-          <img src="/{{ result.evolution_url }}" alt="Évolution temporelle des commits">
+        {% if graph_evolution_url %}
+          <img src="{{ graph_evolution_url }}" alt="Évolution temporelle des commits">
         {% else %}
           <p class="empty">Graphique non disponible.</p>
         {% endif %}

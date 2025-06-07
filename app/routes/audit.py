@@ -8,6 +8,7 @@ from flask import Flask, request, render_template
 from ..audit_utils import (
     lancer_audit
 )
+from flask import current_app as app
 
 from flask import Blueprint
 audit_bp = Blueprint('audit_bp', __name__)
@@ -31,27 +32,30 @@ def audit_depot():
         repo_url = request.form.get('repo_url')
         # (Optionnel) vous pouvez également accepter une date de deadline
         deadline = request.form.get('deadline', None)
-
-        audit_response = requests.post(AUDIT_API_URL)
+        audit_response = requests.post(AUDIT_API_URL, json={"repo_url": repo_url, "deadline": deadline})
         try:
             result_audit = audit_response.json()
-            #app.logger.debug(f"Réponse analyse : {data}")
+            app.logger.debug(f"Réponse analyse : {result_audit}")
         except Exception:
             return f"Erreur JSONDecode lors de l'analyse de l'audit : contenu reçu = {audit_response.text}"
         if not audit_response.ok or result_audit.get("status") != "success":
             return f"Erreur lors de l'analyse de l'audit : {audit_response.text}"
         
-        graph_evolution_url = evolution_graph(result_audit)
-        graph_commit_url = commit_graph(result_audit)
-
-        return render_template('dashboard.html', result=result_audit, repo_url=repo_url)
+        app.logger.debug(f"Resultats audit : {result_audit['result']}")
+        
+        graph_evolution_url = evolution_graph(result_audit['result'])
+        graph_commit_url = commit_graph(result_audit['result'])
+        return render_template(
+            'dashboard.html',
+            result=result_audit['result'],
+            graph_evolution_url=graph_evolution_url,
+            graph_commit_url=graph_commit_url
+            )
+    
     # En GET, on affiche simplement un dashboard vide (sans résultat)
-    return render_template(
-        'dashboard.html', 
-        result_audit=result_audit,
-        graph_evolution_url=graph_evolution_url,
-        graph_commit_url=graph_commit_url
-    )
+    return render_template('dashboard.html')
+    
+
 
 
 @audit_bp.route('/dashboard', methods=['GET', 'POST'])
